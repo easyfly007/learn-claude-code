@@ -116,10 +116,32 @@ def run_bash(command: str) -> str:
     return output[:50000] if output else "(no output)"
 
 
+def _dbg(label: str, payload=None) -> None:
+    # 所有 debug 行都以 "[debug] " 开头；payload 优先用 json 美化
+    if payload is None:
+        print(f"[debug] {label}")
+        return
+    print(f"[debug] {label}")
+    try:
+        rendered = json.dumps(payload, indent=2, ensure_ascii=False, default=str)
+    except (TypeError, ValueError):
+        rendered = repr(payload)
+    for line in rendered.splitlines():
+        print(f"[debug]   {line}")
+
+
 # ============================================================
 # Anthropic backend
 # ============================================================
 def _anthropic_turn(state: LoopState) -> bool:
+    _dbg(f"=== turn {state.turn_count} (anthropic) ===")
+    _dbg("request", {
+        "model": MODEL,
+        "system": SYSTEM,
+        "tools": TOOLS_ANTHROPIC,
+        "messages": state.messages,
+    })
+
     response = client.messages.create(
         model=MODEL,
         system=SYSTEM,
@@ -127,6 +149,14 @@ def _anthropic_turn(state: LoopState) -> bool:
         tools=TOOLS_ANTHROPIC,
         max_tokens=8000,
     )
+
+    _dbg("response", {
+        "stop_reason": response.stop_reason,
+        "usage": getattr(response, "usage", None),
+        "content": [b.model_dump() if hasattr(b, "model_dump") else str(b)
+                    for b in response.content],
+    })
+
     state.messages.append({"role": "assistant", "content": response.content})
 
     for block in response.content:
@@ -142,8 +172,10 @@ def _anthropic_turn(state: LoopState) -> bool:
         if block.type != "tool_use":
             continue
         command = block.input["command"]
+        _dbg("bash exec", {"command": command, "tool_use_id": block.id})
         print(f"\033[33m$ {command}\033[0m")
         output = run_bash(command)
+        _dbg("bash output", output[:500])
         print(output[:500])
         results.append({
             "type": "tool_result",
@@ -165,6 +197,13 @@ def _anthropic_turn(state: LoopState) -> bool:
 # DeepSeek (OpenAI-compatible) backend
 # ============================================================
 def _deepseek_turn(state: LoopState) -> bool:
+    _dbg(f"=== turn {state.turn_count} (deepseek) ===")
+    _dbg("request", {
+        "model": MODEL,
+        "tools": TOOLS_OPENAI,
+        "messages": state.messages,
+    })
+
     response = client.chat.completions.create(
         model=MODEL,
         messages=state.messages,
@@ -173,6 +212,19 @@ def _deepseek_turn(state: LoopState) -> bool:
     )
     msg = response.choices[0].message
     finish = response.choices[0].finish_reason
+
+    _dbg("response", {
+        "finish_reason": finish,
+        "usage": response.usage.model_dump() if response.usage else None,
+        "content": msg.content,
+        "tool_calls": [
+            {
+                "id": tc.id,
+                "function": {"name": tc.function.name, "arguments": tc.function.arguments},
+            }
+            for tc in (msg.tool_calls or [])
+        ],
+    })
 
     assistant_msg = {"role": "assistant", "content": msg.content or ""}
     if msg.tool_calls:
@@ -200,8 +252,10 @@ def _deepseek_turn(state: LoopState) -> bool:
         # arguments comes back as a JSON string in the OpenAI protocol
         args = json.loads(tc.function.arguments)
         command = args["command"]
+        _dbg("bash exec", {"command": command, "tool_call_id": tc.id})
         print(f"\033[33m$ {command}\033[0m")
         output = run_bash(command)
+        _dbg("bash output", output[:500])
         print(output[:500])
         state.messages.append({
             "role": "tool",
