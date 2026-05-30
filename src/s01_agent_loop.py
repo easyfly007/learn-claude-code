@@ -42,9 +42,12 @@ MODEL = os.environ["MODEL_ID"]
 def _init_client():
     if PROVIDER == "anthropic":
         from anthropic import Anthropic
-        if os.getenv("ANTHROPIC_BASE_URL"):
+        # 空串会被 SDK 当作 "用户传了 URL" 传给 httpx 报错，要主动清掉
+        if not os.environ.get("ANTHROPIC_BASE_URL"):
+            os.environ.pop("ANTHROPIC_BASE_URL", None)
+        if not os.environ.get("ANTHROPIC_AUTH_TOKEN"):
             os.environ.pop("ANTHROPIC_AUTH_TOKEN", None)
-        return Anthropic(base_url=os.getenv("ANTHROPIC_BASE_URL") or None)
+        return Anthropic()
     if PROVIDER == "deepseek":
         from openai import OpenAI
         return OpenAI(
