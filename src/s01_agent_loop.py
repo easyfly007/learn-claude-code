@@ -96,7 +96,7 @@ class LoopState:
 
 
 def run_bash(command: str) -> str:
-    dangerous = ["rm -rf /", "sudo", "shutdown", "reboot", ">/dev/"]
+    dangerous = ["rm -rf /", "sudo", "shutdown", "reboot"]
     if any(item in command for item in dangerous):
         return "Error: Dangerous command blocked"
     try:
