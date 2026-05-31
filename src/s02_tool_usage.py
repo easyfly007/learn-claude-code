@@ -14,9 +14,22 @@ PROVIDER env var picks the backend:
 import json
 import os
 import subprocess
+import sys
 from pathlib import Path
 from dotenv import load_dotenv
 load_dotenv(override=True)
+
+# 防止 locale 不是 UTF-8 时 input() 把汉字字节解成孤立代理 (lone surrogates)，
+# 导致后续 httpx strict-UTF-8 编码请求体时报 'surrogates not allowed'
+try:
+    sys.stdin.reconfigure(encoding="utf-8", errors="replace")
+except (AttributeError, OSError):
+    pass
+
+
+def _sanitize(s: str) -> str:
+    """兜底：把字符串里残留的孤立代理还原成原始字节再用 UTF-8 重新解码，无效序列替换掉。"""
+    return s.encode("utf-8", "surrogateescape").decode("utf-8", "replace")
 
 PROVIDER = os.environ.get("PROVIDER", "anthropic").lower()
 MODEL = os.environ["MODEL_ID"]
@@ -169,12 +182,45 @@ def normalize_messages(messages: list) -> list:
         else:
             merged.append(msg)
     return merged
+def _dbg_api(direction: str, payload) -> None:
+    """LLM API I/O 调试日志：首行 [debug] api <direction>: <json>，内容中间无空行，末尾留一个空行。"""
+    try:
+        rendered = json.dumps(payload, indent=2, ensure_ascii=False, default=str)
+    except (TypeError, ValueError):
+        rendered = repr(payload)
+    print(f"[debug] api {direction}: {rendered}")
+    print()
+def _fmt_call(name: str, args: dict, max_arg_len: int = 200) -> str:
+    """工具调用展示：tool_name(arg1='...', arg2=...)，长字符串截断。"""
+    parts = []
+    for k, v in args.items():
+        if isinstance(v, str) and len(v) > max_arg_len:
+            shown = v[:max_arg_len] + f"...<+{len(v) - max_arg_len} chars>"
+            rendered = repr(shown)
+        else:
+            rendered = repr(v)
+        parts.append(f"{k}={rendered}")
+    return f"{name}({', '.join(parts)})"
 def _anthropic_turn(messages: list) -> bool:
+    cleaned = normalize_messages(messages)
+    _dbg_api("input", {
+        "model": MODEL,
+        "system": SYSTEM,
+        "messages": cleaned,
+        "tools": TOOLS_ANTHROPIC,
+        "max_tokens": 8000,
+    })
     response = client.messages.create(
         model=MODEL, system=SYSTEM,
-        messages=normalize_messages(messages),
+        messages=cleaned,
         tools=TOOLS_ANTHROPIC, max_tokens=8000,
     )
+    _dbg_api("output", {
+        "stop_reason": response.stop_reason,
+        "usage": getattr(response, "usage", None),
+        "content": [b.model_dump() if hasattr(b, "model_dump") else str(b)
+                    for b in response.content],
+    })
     messages.append({"role": "assistant", "content": response.content})
     if response.stop_reason != "tool_use":
         return False
@@ -182,8 +228,8 @@ def _anthropic_turn(messages: list) -> bool:
     for block in response.content:
         if block.type == "tool_use":
             handler = TOOL_HANDLERS.get(block.name)
+            print(f"\033[33m> {_fmt_call(block.name, dict(block.input))}\033[0m")
             output = handler(**block.input) if handler else f"Unknown tool: {block.name}"
-            print(f"> {block.name}:")
             print(output[:200])
             results.append({"type": "tool_result", "tool_use_id": block.id, "content": output})
     messages.append({"role": "user", "content": results})
@@ -191,6 +237,12 @@ def _anthropic_turn(messages: list) -> bool:
 
 
 def _deepseek_turn(messages: list) -> bool:
+    _dbg_api("input", {
+        "model": MODEL,
+        "messages": messages,
+        "tools": TOOLS_OPENAI,
+        "max_tokens": 8000,
+    })
     response = client.chat.completions.create(
         model=MODEL,
         messages=messages,
@@ -199,6 +251,16 @@ def _deepseek_turn(messages: list) -> bool:
     )
     msg = response.choices[0].message
     finish = response.choices[0].finish_reason
+    _dbg_api("output", {
+        "finish_reason": finish,
+        "usage": response.usage.model_dump() if response.usage else None,
+        "content": msg.content,
+        "tool_calls": [
+            {"id": tc.id,
+             "function": {"name": tc.function.name, "arguments": tc.function.arguments}}
+            for tc in (msg.tool_calls or [])
+        ],
+    })
 
     assistant_msg = {"role": "assistant", "content": msg.content or ""}
     if msg.tool_calls:
@@ -219,8 +281,8 @@ def _deepseek_turn(messages: list) -> bool:
         # OpenAI 协议里 arguments 是 JSON 字符串
         args = json.loads(tc.function.arguments)
         handler = TOOL_HANDLERS.get(tc.function.name)
+        print(f"\033[33m> {_fmt_call(tc.function.name, args)}\033[0m")
         output = handler(**args) if handler else f"Unknown tool: {tc.function.name}"
-        print(f"> {tc.function.name}:")
         print(output[:200])
         messages.append({
             "role": "tool",
@@ -240,7 +302,7 @@ if __name__ == "__main__":
     history = [{"role": "system", "content": SYSTEM}] if PROVIDER == "deepseek" else []
     while True:
         try:
-            query = input("\033[36ms02 >> \033[0m")
+            query = _sanitize(input("\033[36ms02 >> \033[0m"))
         except (EOFError, KeyboardInterrupt):
             break
         if query.strip().lower() in ("q", "exit", ""):
