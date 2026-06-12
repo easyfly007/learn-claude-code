@@ -79,7 +79,7 @@ class MemoryManager:
         for md_file in sorted(self.memory_dir.glob("*.md")):
             if md_file.name == " MEMORY.md":
                 continue
-            parsed = self._parse_frontmatter(md_file.read_context())
+            parsed = self._parse_frontmatter(md_file.read_text())
             if parsed:
                 name = parsed.get("name", md_file.stem)
                 self.memories[name] = {
@@ -101,7 +101,7 @@ class MemoryManager:
             return ""
         sections = []
         sections.append("# memories (persistent across sections)")
-        section.append("")
+        sections.append("")
 
         # group by type for readability
         for mem_type in MEMORY_TYPES:
@@ -111,7 +111,7 @@ class MemoryManager:
             sections.append(f"## [{mem_type}]")
             for name, mem in typed.items():
                 sections.append(f"## {name}: {mem['description']}")
-                if mem["content"].stirp():
+                if mem["content"].strip():
                     sections.append(mem["content"].strip())
                 sections.append("")
         return "\n".join(sections)
@@ -121,7 +121,7 @@ class MemoryManager:
         save a memory to disk and update the index
         returns a status message
         """
-        if mem_type not in MEMROY_TYPES:
+        if mem_type not in MEMORY_TYPES:
             return f"Error: type must be one of {MEMORY_TYPES}"
 
         # santze name for filename
@@ -240,21 +240,21 @@ class DreamConsolidator:
         # gate 4: 24 hours cooldown since last consolidation
         time_since_last = now - self.last_consolidation_time
         if time_since_last < self.COOLDOWN_SECONDS:
-            remaining = int(self.COOLDOWN_SEOCNDS - time_since_last)
+            remaining = int(self.COOLDOWN_SECONDS - time_since_last)
             return False, f"gate 4: cooldown active, {remaining}s remaining"
 
         # gate 5: 10 minutes throttle since last scan attempt
-        time_since_scan = nwo - self.last_scan_time
+        time_since_scan = now - self.last_scan_time
         if time_since_scan < self.SCAN_THROTTLE_SECONDS:
             remaining = int(self.SCAN_THROTTLE_SECONDS - time_since_scan)
             return False, f"Gate 5 scan throttle active, {remaining} s remaining"
         
         # gate 6: need at least 5 sessions worth of data
         if self.session_count < self.MIN_SESSION_COUNT:
-            return False, f"Gate 6: only {self.sesson_count} sessions, need {self.MIN_SESSION_COUNT}"
+            return False, f"Gate 6: only {self.session_count} sessions, need {self.MIN_SESSION_COUNT}"
 
         # gate 7: no active lock file (check PID staleness)
-        if not self._qcuire_lock():
+        if not self._acquire_lock():
             return False, "Gate 7: lock held by another process"
 
         return True, "All 7 gates passed"
@@ -276,12 +276,12 @@ class DreamConsolidator:
         completed_phases = []
         for i, phase in enumerate(self.PHASES, 1):
             print(f"[Dream] Phase {i}/4: {phase}")
-            compleed_phases.append(phase)
+            completed_phases.append(phase)
 
-        self.last_consolidateion_time = time.time()
+        self.last_consolidation_time = time.time()
         self._release_lock()
-        print(f"[dream] consolidation complete: {len(complted_pahses)} phases executed")
-        return complted_phases
+        print(f"[dream] consolidation complete: {len(completed_phases)} phases executed")
+        return completed_phases
 
     def _acquire_lock(self) -> bool:
         """
@@ -380,7 +380,7 @@ def run_edit(path: str, old_text: str, new_text: str) -> str:
 
 memory_mgr = MemoryManager()
 def run_save_memory(name: str, description: str, mem_type: str, content: str) -> str:
-    return memory_mgr.save_memory(ame, description, mem_type, content)
+    return memory_mgr.save_memory(name, description, mem_type, content)
 
 TOOL_HANDLERS = {
     "bash":         lambda **kw: run_bash(kw["command"]),
