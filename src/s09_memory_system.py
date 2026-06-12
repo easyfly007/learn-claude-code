@@ -458,8 +458,8 @@ TOOLS = [
                             },
                         "type": {
                             "type": "string",
-                            "enum": ["user", "feedback", "project", "reference"],
-                            "description": "user=preferences, feedback=corrections, project=non-obvious project conventions or decision reasons, reference=external resource pointers"},
+                            "enum": ["user", "feedback", "project", "preference"],
+                            "description": "user=who the user is, feedback=corrections, project=non-obvious project conventions or decision reasons, preference=user preferences and external resource pointers"},
                         "content": {
                             "type": "string",
                             "description": "Full memory content (multi-line OK)"
@@ -478,7 +478,7 @@ When to save memories:
   (for example: a rule exists because of compliance, or a legacy module must
   stay untouched for business reasons) -> type: project
 - You learn where an external resource lives (ticket board, dashboard, docs URL)
-  -> type: reference
+  -> type: preference
 When NOT to save:
 - Anything easily derivable from code (function signatures, file structure, directory layout)
 - Temporary task state (current branch, open PR numbers, current TODOs)
