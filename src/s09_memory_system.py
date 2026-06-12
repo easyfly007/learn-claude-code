@@ -83,8 +83,8 @@ class MemoryManager:
             if parsed:
                 name = parsed.get("name", md_file.stem)
                 self.memories[name] = {
-                        "description": parsed.get("description", "")
-                        "type": parsed.get("type", "project")
+                        "description": parsed.get("description", ""),
+                        "type": parsed.get("type", "project"),
                         "content": parsed.get("content", ""),
                         "file": md_file.name,
                         }
@@ -105,7 +105,7 @@ class MemoryManager:
 
         # group by type for readability
         for mem_type in MEMORY_TYPES:
-            typed = {k:v in self.memories.items() if v["type"] == mem_type}
+            typed = {k: v for k, v in self.memories.items() if v["type"] == mem_type}
             if not typed:
                 continue
             sections.append(f"## [{mem_type}]")
@@ -140,7 +140,7 @@ class MemoryManager:
                 f"---\n"
                 f"{content}\n"
                 )
-        file_name = f"safe_name}.md"
+        file_name = f"{safe_name}.md"
         file_path =self.memory_dir / file_name
         file_path.write_text(frontmatter)
 
@@ -194,7 +194,7 @@ class DreamConsolidator:
     COOLDOWN_SECONDS = 86400        # 24 hours between consolidations
     SCAN_THROTTLE_SECONDS = 600     # 10 minutes between scan attempts
     MIN_SESSION_COUNT = 5           # need enough data to consolidate
-    LOCK_STALE_SECONDS = 3600       $ PID lock considered stal after 1 hour
+    LOCK_STALE_SECONDS = 3600       # PID lock considered stal after 1 hour
 
     PHASES = [
             "Orient: scan MEMORY.md index for structure and categories",
