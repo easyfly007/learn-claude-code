@@ -1,14 +1,14 @@
-#harness: persistence - remembering across the session boundry
+#harness: persistence - remembering across the session boundary
 
 """
 s09_memory_system.py - memory system
 
-this teaching version focus on one core idea:
-some information should survice the current conversation, but not everything 
+this teaching version focuses on one core idea:
+some information should survive the current conversation, but not everything
 belongs in memory
 
 use memory for:
-    - use preferences
+    - user preferences
     - repeated user feedback
     - project facts that are not obvious from the current code
     - pointers to external resources
@@ -23,17 +23,17 @@ storage layout:
         MEMORY.md
         prefer_tabs.md
         review_style.md
-        incidentOboard.md
+        incident_board.md
 
-each memory is a small markdown file with frontmatters
-the agent can save a memory throgugh save_memory() and the memory index
+each memory is a small markdown file with frontmatter
+the agent can save a memory through save_memory() and the memory index
 is rebuilt after each write.
 
 an optional dream pass can later consolidate, deduplicate and prune
-srored memories. it is useful, but it is not the first thing readers need to understand.
+stored memories. it is useful, but it is not the first thing readers need to understand.
 
-key insight: 
-    memory only store cross-session information that is still
+key insight:
+    memory only stores cross-session information that is still
     worth recalling later and is not easy to re-derive from the current repo
 """
 
@@ -100,7 +100,7 @@ class MemoryManager:
         if not self.memories:
             return ""
         sections = []
-        sections.append("# memories (persistent across sections)")
+        sections.append("# memories (persistent across sessions)")
         sections.append("")
 
         # group by type for readability
@@ -124,7 +124,7 @@ class MemoryManager:
         if mem_type not in MEMORY_TYPES:
             return f"Error: type must be one of {MEMORY_TYPES}"
 
-        # santze name for filename
+        # sanitize name for filename
         safe_name = re.sub(r"[^a-zA-Z0-9_-]", "_", name.lower())
         if not safe_name:
             return "Error: invalid memory name"
@@ -154,12 +154,12 @@ class MemoryManager:
 
         # rebuild memory.md index
         self._rebuild_index()
-        return f"save memory '{name}' [{mem_type}] to {file_path.relative_to(WORKDIR)}"
+        return f"saved memory '{name}' [{mem_type}] to {file_path.relative_to(WORKDIR)}"
 
     def _rebuild_index(self):
         """
         rebuild memory.md from current in-memory state, capped at 200 lines"""
-        lines = ["# Memroy Index", ""]
+        lines = ["# Memory Index", ""]
         for name, mem in self.memories.items():
             lines.append(f"- {name}: {mem['description']} [{mem['type']}]")
             if len(lines) > MAX_INDEX_LINES:
@@ -185,22 +185,22 @@ class MemoryManager:
 
 class DreamConsolidator:
     """
-    auto-consolidatation of memories between sessions("Dream")
+    auto-consolidation of memories between sessions ("Dream")
     this is an optional later-stage feature
     its job is to prevent the memory store from growing into a noisy pile by merging
-    dedupliating and pruning entries over time
+    deduplicating and pruning entries over time
     """
 
     COOLDOWN_SECONDS = 86400        # 24 hours between consolidations
     SCAN_THROTTLE_SECONDS = 600     # 10 minutes between scan attempts
     MIN_SESSION_COUNT = 5           # need enough data to consolidate
-    LOCK_STALE_SECONDS = 3600       # PID lock considered stal after 1 hour
+    LOCK_STALE_SECONDS = 3600       # PID lock considered stale after 1 hour
 
     PHASES = [
             "Orient: scan MEMORY.md index for structure and categories",
             "Gather: read individual memory files for full content",
-            "COnsolidate: merge related memories, remove stal entries",
-            "Prune: enforce 200-lin limit on MEMORY.md index",
+            "Consolidate: merge related memories, remove stale entries",
+            "Prune: enforce 200-line limit on MEMORY.md index",
             ]
     def __init__(self, memory_dir: Path = None):
         self.memory_dir = memory_dir or MEMORY_DIR
@@ -213,7 +213,7 @@ class DreamConsolidator:
 
     def should_consolidate(self)->tuple[bool, str]:
         """
-        check 7 dates in sequence. all must pass
+        check 7 gates in sequence. all must pass
         return (can_run, reason) where reason explains the first failed gate
         """
         import time
@@ -228,14 +228,14 @@ class DreamConsolidator:
             return False, "Gate 2: memory directory does not exist"
 
         memory_files = list(self.memory_dir.glob("*.md"))
-        #execute MEMORY.md itself from the count
+        # exclude MEMORY.md itself from the count
         memory_files = [f for f in memory_files if f.name != "MEMORY.md"]
         if not memory_files:
             return False, "Gate 2: no memory files found"
 
         # gate 3: not in plan mode (only consolidate in active mode)
         if self.mode == "plan":
-            return False, "Gate 3: plan mode does not allow consolidatetion"
+            return False, "Gate 3: plan mode does not allow consolidation"
 
         # gate 4: 24 hours cooldown since last consolidation
         time_since_last = now - self.last_consolidation_time
@@ -247,7 +247,7 @@ class DreamConsolidator:
         time_since_scan = now - self.last_scan_time
         if time_since_scan < self.SCAN_THROTTLE_SECONDS:
             remaining = int(self.SCAN_THROTTLE_SECONDS - time_since_scan)
-            return False, f"Gate 5 scan throttle active, {remaining} s remaining"
+            return False, f"Gate 5: scan throttle active, {remaining}s remaining"
         
         # gate 6: need at least 5 sessions worth of data
         if self.session_count < self.MIN_SESSION_COUNT:
@@ -270,7 +270,7 @@ class DreamConsolidator:
         if not can_run:
             print(f"[dream] cannot consolidate: {reason}")
             return []
-        print("[dream] startting consolidation ...")
+        print("[dream] starting consolidation ...")
         self.last_scan_time = time.time()
 
         completed_phases = []
