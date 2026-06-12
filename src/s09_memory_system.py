@@ -77,7 +77,7 @@ class MemoryManager:
 
         # scan all .md files except MEMORY.md
         for md_file in sorted(self.memory_dir.glob("*.md")):
-            if md_file.name == " MEMORY.md":
+            if md_file.name == "MEMORY.md":
                 continue
             parsed = self._parse_frontmatter(md_file.read_text())
             if parsed:
@@ -133,7 +133,7 @@ class MemoryManager:
 
         #write individual memory file with frontmatter
         frontmatter = (
-                f"--\n"
+                f"---\n"
                 f"name: {name}\n"
                 f"description: {description}\n"
                 f"type: {mem_type}\n"
@@ -172,7 +172,7 @@ class MemoryManager:
         """
         parse --- delimited frontmatter + body content
         """
-        match = re.match(r"^---\s&\n(.*?)\n---\s*\n(.*)", text, re.DOTALL)
+        match = re.match(r"^---\s*\n(.*?)\n---\s*\n(.*)", text, re.DOTALL)
         if not match:
             return None
         header, body = match.group(1), match.group(2)
@@ -295,6 +295,10 @@ class DreamConsolidator:
                 pid_str, timestamp_str = lock_data.split(":", 1)
                 pid = int(pid_str)
                 lock_time = float(timestamp_str)
+                # Re-entrant: we already own the lock (e.g. should_consolidate
+                # acquired it, then consolidate() re-checks the gates)
+                if pid == os.getpid():
+                    return True
                 # Check if lock is stale
                 if (time.time() - lock_time) > self.LOCK_STALE_SECONDS:
                     print(f"[Dream] Removing stale lock from PID {pid}")
