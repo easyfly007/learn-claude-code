@@ -1,18 +1,18 @@
 """
 s15: agent teams - messageBus + spawn_teammate_thread + index injection
 
-run python s15_agent_teams/code.py
+run python s15_agent_team/code.py
 
-- messagebus class: file based mailboxes (.mailboxes/*.json)
+- messagebus class: file based mailboxes (.mailboxes/*.jsonl)
 - spawn_teammate_thread: create teammate in background thread
 - teammate runs own simplified agent_loop (bash, read, write, send_message)
-- lead tools: spawn_teammate, send_messages, check_inbox (3 new)
-- leas inbox: teammate messages injected into history (not just print)
-- teaching version: teammate limited to 10 rounds (readl cc uses idle loop)
+- lead tools: spawn_teammate, send_message, check_inbox (3 new)
+- lead inbox: teammate messages injected into history (not just print)
+- teaching version: teammate limited to 10 rounds (real cc uses idle loop)
 
-leas: cron_queue -> messages -> prompt -> LLM -> tools --> loop
+lead: cron_queue -> messages -> prompt -> LLM -> tools --> loop
           ^                           v                     |
-          |<-- inbox <-- messagesBus <-- teammate.send_message
+          |<-- inbox <-- messageBus <-- teammate.send_message
 teammate: inbox -> LLM -> bash/read/write/send -> loop (max 10 turns)
 """
 import os, subprocess, json, time, random, threading
